@@ -1,0 +1,17 @@
+{
+  "name": "股票罗盘",
+  "description": "实时股票分析应用，支持A股、港股、美股行情查询",
+  "website": "https://your-app.vercel.app",
+  "repository": "https://github.com/yourusername/stock-analyzer",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "features": {
+    "clustering": false
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ]
+}

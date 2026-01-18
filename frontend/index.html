@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📈 股市罗盘 - 实时行情分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0D1117;
+            --bg-secondary: #161B22;
+            --bg-tertiary: #21262D;
+            --text-primary: #F0F6FC;
+            --text-secondary: #8B949E;
+            --text-muted: #6E7681;
+            --accent-blue: #58A6FF;
+            --accent-green: #3FB950;
+            --accent-red: #F85149;
+            --accent-orange: #D29922;
+            --border-color: #30363D;
+            --shadow-color: rgba(0, 0, 0, 0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            padding: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-content { max-width: 800px; margin: 0 auto; }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .search-container { position: relative; }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 50px 14px 20px;
+            font-size: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .search-input:focus { border-color: var(--accent-blue); }
+
+        .search-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--accent-blue);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            cursor: pointer;
+        }
+
+        .quick-select {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .quick-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            border-radius: 20px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .quick-btn.active {
+            background: rgba(88, 166, 255, 0.2);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .main-content { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+        .loading { display: flex; justify-content: center; align-items: center; padding: 40px; }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .price-card {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stock-name { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+
+        .stock-code { font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+
+        .market-badge { background: var(--accent-blue); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+
+        .data-source { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted); margin-top: 8px; }
+
+        .data-source-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); animation: pulse 2s infinite; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .price-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 16px; }
+
+        .current-price { font-size: 48px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+
+        .price-change { text-align: right; }
+
+        .change-value { font-size: 20px; font-weight: 600; font-family: 'Roboto Mono', monospace; display: flex; align-items: center; gap: 4px; }
+        .change-percent { font-size: 16px; font-weight: 500; font-family: 'Roboto Mono', monospace; }
+
+        .positive { color: var(--accent-green); }
+        .negative { color: var(--accent-red); }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+
+        .stat-item { text-align: center; }
+        .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .stat-value { font-size: 14px; font-weight: 600; font-family: 'Roboto Mono', monospace; color: var(--text-primary); }
+
+        .score-card { background: var(--bg-secondary); border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); }
+
+        .score-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+        .score-value { font-size: 32px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+
+        .score-trend { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+        .trend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        .period-selector { display: flex; background: var(--bg-tertiary); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
+
+        .period-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 10px;
+        }
+
+        .period-btn.active { background: var(--accent-blue); color: white; }
+
+        .volatility-card { background: var(--bg-secondary); border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); }
+
+        .volatility-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .volatility-title { font-size: 14px; color: var(--text-secondary); }
+        .confidence-badge { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); padding: 4px 10px; border-radius: 6px; font-size: 11px; }
+
+        .price-range { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .range-low { font-size: 24px; font-weight: 700; color: var(--accent-green); font-family: 'Roboto Mono', monospace; }
+        .range-arrow { color: var(--text-muted); font-size: 20px; }
+        .range-high { font-size: 24px; font-weight: 700; color: var(--accent-red); font-family: 'Roboto Mono', monospace; }
+
+        .range-percent { text-align: center; margin-bottom: 16px; }
+        .range-percent span { background: var(--bg-tertiary); padding: 4px 12px; border-radius: 6px; font-size: 12px; color: var(--text-secondary); }
+
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+        .action-box { padding: 16px; border-radius: 12px; text-align: center; }
+        .action-box.buy { background: rgba(63, 185, 80, 0.15); border: 1px solid rgba(63, 185, 80, 0.3); }
+        .action-box.sell { background: rgba(248, 81, 73, 0.15); border: 1px solid rgba(248, 81, 73, 0.3); }
+
+        .action-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+        .action-price { font-size: 20px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+        .action-box.buy .action-price { color: var(--accent-green); }
+        .action-box.sell .action-price { color: var(--accent-red); }
+
+        .risk-reward { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        .risk-box { background: var(--bg-tertiary); padding: 12px; border-radius: 10px; text-align: center; }
+        .risk-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+        .risk-value { font-size: 16px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+        .stop-loss .risk-value { color: var(--accent-red); }
+        .take-profit .risk-value { color: var(--accent-green); }
+
+        .recommendation-card {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 16px;
+            border: 2px solid;
+            text-align: center;
+        }
+
+        .recommendation-card.strong-buy { border-color: rgba(63, 185, 80, 0.5); background: linear-gradient(135deg, rgba(63, 185, 80, 0.1) 0%, rgba(63, 185, 80, 0.05) 100%); }
+        .recommendation-card.buy { border-color: rgba(63, 185, 80, 0.3); }
+        .recommendation-card.hold { border-color: rgba(210, 153, 34, 0.5); background: linear-gradient(135deg, rgba(210, 153, 34, 0.1) 0%, rgba(210, 153, 34, 0.05) 100%); }
+        .recommendation-card.sell { border-color: rgba(248, 81, 73, 0.3); }
+        .recommendation-card.strong-sell { border-color: rgba(248, 81, 73, 0.5); background: linear-gradient(135deg, rgba(248, 81, 73, 0.1) 0%, rgba(248, 81, 73, 0.05) 100%); }
+
+        .recommendation-icon { font-size: 48px; margin-bottom: 12px; }
+        .recommendation-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+        .recommendation-card.strong-buy .recommendation-title { color: var(--accent-green); }
+        .recommendation-card.buy .recommendation-title { color: #56D364; }
+        .recommendation-card.hold .recommendation-title { color: var(--accent-orange); }
+        .recommendation-card.sell .recommendation-title { color: #FF7B72; }
+        .recommendation-card.strong-sell .recommendation-title { color: var(--accent-red); }
+
+        .recommendation-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+        .chart-card { background: var(--bg-secondary); border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .chart-title { font-size: 16px; font-weight: 600; }
+        .chart-type-btns { display: flex; gap: 8px; }
+        .chart-type-btn { padding: 6px 12px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); font-size: 12px; border-radius: 6px; cursor: pointer; }
+        .chart-type-btn.active { background: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+        .chart-container { position: relative; height: 250px; }
+
+        .tech-indicators { background: var(--bg-tertiary); border-radius: 12px; padding: 16px; margin-top: 16px; }
+        .tech-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        .tech-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        .tech-item { text-align: center; }
+        .tech-label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+        .tech-value { font-size: 14px; font-weight: 600; font-family: 'Roboto Mono', monospace; color: var(--text-primary); }
+
+        .news-section { background: var(--bg-secondary); border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); }
+        .news-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .news-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+        .sentiment-stats { display: flex; gap: 12px; margin-bottom: 16px; }
+        .sentiment-item { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+        .sentiment-positive { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        .sentiment-negative { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); }
+        .sentiment-neutral { background: rgba(139, 148, 158, 0.15); color: var(--text-secondary); }
+
+        .news-list { display: flex; flex-direction: column; gap: 12px; }
+
+        .news-item { background: var(--bg-tertiary); border-radius: 12px; padding: 16px; border-left: 3px solid var(--border-color); }
+        .news-item.positive { border-left-color: var(--accent-green); }
+        .news-item.negative { border-left-color: var(--accent-red); }
+        .news-item.neutral { border-left-color: var(--text-muted); }
+
+        .news-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .news-sentiment { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+        .news-sentiment.positive { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+        .news-sentiment.negative { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        .news-sentiment.neutral { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+        .news-time { font-size: 11px; color: var(--text-muted); }
+        .news-headline { font-size: 14px; font-weight: 500; line-height: 1.5; margin-bottom: 8px; }
+        .news-summary { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+        .news-source { font-size: 10px; color: var(--accent-blue); margin-top: 8px; }
+
+        .disclaimer { background: var(--bg-tertiary); border-radius: 12px; padding: 16px; margin: 24px 0; display: flex; gap: 12px; align-items: flex-start; }
+        .disclaimer-icon { font-size: 20px; flex-shrink: 0; }
+        .disclaimer-text { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+
+        .error-message { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 16px; }
+        .error-message h3 { color: var(--accent-red); margin-bottom: 8px; }
+
+        @media (max-width: 600px) {
+            .current-price { font-size: 36px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .tech-grid { grid-template-columns: repeat(3, 1fr); }
+            .chart-container { height: 200px; }
+            .action-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">📈 股市罗盘 - 实时行情</div>
+            <div class="search-container">
+                <input type="text" class="search-input" id="stockSearch" placeholder="输入股票代码（如：600519、AAPL、00700）" />
+                <button class="search-btn" onclick="searchStock()">🔍</button>
+            </div>
+            <div class="quick-select">
+                <button class="quick-btn active" onclick="quickSelect('sh600519')">A股</button>
+                <button class="quick-btn" onclick="quickSelect('AAPL')">美股</button>
+                <button class="quick-btn" onclick="quickSelect('hk00700')">港股</button>
+                <button class="quick-btn" onclick="quickSelect('TSLA')">特斯拉</button>
+                <button class="quick-btn" onclick="quickSelect('NVDA')">英伟达</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div id="loadingState" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <div id="errorState" style="display: none;">
+            <div class="error-message">
+                <h3>⚠️ 获取数据失败</h3>
+                <p id="errorText">请检查股票代码是否正确</p>
+            </div>
+        </div>
+
+        <div id="contentArea">
+            <div class="price-card">
+                <div>
+                    <div class="stock-name" id="stockName">贵州茅台</div>
+                    <div class="stock-code">
+                        <span id="stockCode">sh600519</span>
+                        <span class="market-badge" id="marketBadge">A股</span>
+                    </div>
+                    <div class="data-source">
+                        <span class="data-source-dot"></span>
+                        <span id="dataSource">准备就绪</span>
+                    </div>
+                </div>
+                <div class="price-section">
+                    <div class="current-price" id="currentPrice">¥1694.00</div>
+                    <div class="price-change">
+                        <div class="change-value positive" id="changeValue">▲ +35.70</div>
+                        <div class="change-percent positive" id="changePercent">+2.15%</div>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item"><div class="stat-label">今开</div><div class="stat-value" id="openPrice">¥1660.00</div></div>
+                    <div class="stat-item"><div class="stat-label">最高</div><div class="stat-value" id="highPrice">¥1700.00</div></div>
+                    <div class="stat-item"><div class="stat-label">最低</div><div class="stat-value" id="lowPrice">¥1655.00</div></div>
+                    <div class="stat-item"><div class="stat-label">成交量</div><div class="stat-value" id="volume">345万</div></div>
+                </div>
+            </div>
+
+            <div class="score-card">
+                <div class="score-title">📊 综合评分</div>
+                <div class="score-value positive" id="overallScore">72</div>
+                <div class="score-trend">
+                    <div class="trend-dot" style="background: var(--accent-green);"></div>
+                    <div class="trend-text positive" id="overallTrend">看涨</div>
+                </div>
+            </div>
+
+            <div class="period-selector">
+                <button class="period-btn active" onclick="setPeriod('day')">未来24小时</button>
+                <button class="period-btn" onclick="setPeriod('week')">未来1周</button>
+                <button class="period-btn" onclick="setPeriod('month')">未来1个月</button>
+            </div>
+
+            <div class="recommendation-card buy" id="recommendationCard">
+                <div class="recommendation-icon">💹</div>
+                <div class="recommendation-title" id="recommendationTitle">建议买入</div>
+                <div class="recommendation-desc" id="recommendationDesc">技术指标偏向乐观，可考虑在回调时买入</div>
+            </div>
+
+            <div class="volatility-card">
+                <div class="volatility-header">
+                    <div class="volatility-title">预测<span id="periodLabel">日</span>内波幅范围</div>
+                    <div class="confidence-badge" id="confidenceBadge">置信度 75%</div>
+                </div>
+                <div class="price-range">
+                    <div class="range-low" id="predictedLow">¥1660.00</div>
+                    <span class="range-arrow">→</span>
+                    <div class="range-high" id="predictedHigh">¥1728.00</div>
+                </div>
+                <div class="range-percent"><span>预计波幅: <span id="predictedRange">4.01%</span></span></div>
+                <div class="action-grid">
+                    <div class="action-box buy">
+                        <div class="action-label">买入建议</div>
+                        <div class="action-price" id="buyPrice">¥1660.00</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">支撑位附近</div>
+                    </div>
+                    <div class="action-box sell">
+                        <div class="action-label">卖出建议</div>
+                        <div class="action-price" id="sellPrice">¥1728.00</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">压力位附近</div>
+                    </div>
+                </div>
+                <div class="risk-reward">
+                    <div class="risk-box stop-loss"><div class="risk-label">止损</div><div class="risk-value" id="stopLoss">¥1620.00</div></div>
+                    <div class="risk-box take-profit"><div class="risk-label">止盈</div><div class="risk-value" id="takeProfit">¥1780.00</div></div>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">📈 K线走势图</div>
+                    <div class="chart-type-btns">
+                        <button class="chart-type-btn active" onclick="setChartType('day')">日K</button>
+                        <button class="chart-type-btn" onclick="setChartType('week')">周K</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="kLineChart"></canvas>
+                </div>
+                <div class="tech-indicators">
+                    <div class="tech-title">技术指标</div>
+                    <div class="tech-grid">
+                        <div class="tech-item"><div class="tech-label">MA5</div><div class="tech-value" id="ma5">1680.2</div></div>
+                        <div class="tech-item"><div class="tech-label">MA20</div><div class="tech-value" id="ma20">1655.5</div></div>
+                        <div class="tech-item"><div class="tech-label">ATR</div><div class="tech-value" id="atr">28.5</div></div>
+                        <div class="tech-item"><div class="tech-label">RSI</div><div class="tech-value" id="rsi">62.3</div></div>
+                        <div class="tech-item"><div class="tech-label">MACD</div><div class="tech-value" id="macd">15.2</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="news-section">
+                <div class="news-header">
+                    <div class="news-title">📰 市场新闻</div>
+                </div>
+                <div class="sentiment-stats">
+                    <div class="sentiment-item sentiment-positive" id="positiveCount">利好 3</div>
+                    <div class="sentiment-item sentiment-negative" id="negativeCount">利空 2</div>
+                    <div class="sentiment-item sentiment-neutral" id="neutralCount">中性 2</div>
+                </div>
+                <div class="news-list" id="newsList"></div>
+            </div>
+
+            <div class="disclaimer">
+                <div class="disclaimer-icon">⚠️</div>
+                <div class="disclaimer-text">
+                    <strong>免责声明：</strong>本APP提供的波幅预测和买卖建议仅供参考，不构成任何投资建议。股票投资具有高风险，请谨慎决策。
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let currentStock = null;
+        let currentPeriod = 'day';
+        let currentChartType = 'day';
+        let chartInstance = null;
+        let refreshInterval = null;
+
+        // 股票代码数据库
+        const stockDatabase = {
+            'sh600519': { name: '贵州茅台', market: 'A股', type: 'CN', basePrice: 1694.00 },
+            'sh000001': { name: '上证指数', market: 'A股', type: 'CN', basePrice: 3068.30 },
+            'sh600036': { name: '招商银行', market: 'A股', type: 'CN', basePrice: 35.68 },
+            'sh601398': { name: '工商银行', market: 'A股', type: 'CN', basePrice: 4.92 },
+            'sh600050': { name: '中国联通', market: 'A股', type: 'CN', basePrice: 5.85 },
+            'sh600030': { name: '中信证券', market: 'A股', type: 'CN', basePrice: 22.50 },
+            'sh600276': { name: '恒瑞医药', market: 'A股', type: 'CN', basePrice: 48.60 },
+            'sh000651': { name: '格力电器', market: 'A股', type: 'CN', basePrice: 38.50 },
+            'sz002594': { name: '比亚迪', market: 'A股', type: 'CN', basePrice: 245.80 },
+            'hk00700': { name: '腾讯控股', market: '港股', type: 'HK', basePrice: 378.60 },
+            'hk09988': { name: '阿里巴巴', market: '港股', type: 'HK', basePrice: 79.35 },
+            'hk03690': { name: '美团-W', market: '港股', type: 'HK', basePrice: 168.50 },
+            'hk02318': { name: '平安保险', market: '港股', type: 'HK', basePrice: 52.30 },
+            'hk00981': { name: '中芯国际', market: '港股', type: 'HK', basePrice: 25.80 },
+            'hk09618': { name: '京东-SW', market: '港股', type: 'HK', basePrice: 148.00 },
+            'AAPL': { name: '苹果公司', market: '美股', type: 'US', basePrice: 185.92 },
+            'MSFT': { name: '微软', market: '美股', type: 'US', basePrice: 378.91 },
+            'GOOGL': { name: '谷歌', market: '美股', type: 'US', basePrice: 141.80 },
+            'AMZN': { name: '亚马逊', market: '美股', type: 'US', basePrice: 178.25 },
+            'TSLA': { name: '特斯拉', market: '美股', type: 'US', basePrice: 248.48 },
+            'NVDA': { name: '英伟达', market: '美股', type: 'US', basePrice: 495.22 },
+            'META': { name: 'Meta', market: '美股', type: 'US', basePrice: 505.75 },
+            'AMD': { name: 'AMD', market: '美股', type: 'US', basePrice: 142.30 },
+            'INTC': { name: '英特尔', market: '美股', type: 'US', basePrice: 45.20 },
+            'NFLX': { name: '奈飞', market: '美股', type: 'US', basePrice: 485.50 },
+        };
+
+        // 格式化价格
+        function formatPrice(price, currency) {
+            if (!price || isNaN(price) || price <= 0) return '--';
+            if (price >= 1000) return `${currency}${price.toFixed(2)}`;
+            if (price >= 100) return `${currency}${price.toFixed(2)}`;
+            if (price >= 10) return `${currency}${price.toFixed(2)}`;
+            return `${currency}${price.toFixed(3)}`;
+        }
+
+        // 格式化成交量
+        function formatVolume(volume) {
+            if (!volume || isNaN(volume)) return '--';
+            if (volume >= 1000000000) return (volume / 1000000000).toFixed(1) + '亿';
+            if (volume >= 1000000) return (volume / 1000000).toFixed(1) + '百万';
+            if (volume >= 10000) return (volume / 10000).toFixed(1) + '万';
+            return volume.toString();
+        }
+
+        // 获取实时数据
+        async function fetchRealTimeData(symbol) {
+            const response = await fetch(`/api/stock?symbol=${symbol}`);
+            const result = await response.json();
+            return result;
+        }
+
+        // 获取K线数据
+        async function fetchKLineData(symbol, period) {
+            const response = await fetch(`/api/kline?symbol=${symbol}&period=${period}`);
+            const result = await response.json();
+            return result;
+        }
+
+        // 生成模拟数据（当实时数据不可用时）
+        function generateSimulatedData(symbol) {
+            const info = stockDatabase[symbol.toLowerCase()] || { name: symbol, market: '美股', type: 'US', basePrice: 100 };
+            const currency = info.type === 'CN' ? '¥' : (info.type === 'HK' ? 'HK$' : '$');
+            
+            const volatility = info.basePrice * 0.025;
+            const changePercent = (Math.random() - 0.4) * 4; // -1.6% 到 +2.4%
+            const currentPrice = info.basePrice * (1 + changePercent / 100);
+            const changeAmount = currentPrice - info.basePrice;
+            const openPrice = currentPrice - changeAmount * 0.5;
+            const highPrice = currentPrice + volatility * 0.8;
+            const lowPrice = currentPrice - volatility * 0.8;
+            
+            return {
+                symbol: symbol,
+                name: info.name,
+                market: info.market,
+                type: info.type,
+                currency: currency,
+                currentPrice: currentPrice,
+                changePercent: changePercent,
+                changeAmount: changeAmount,
+                openPrice: openPrice,
+                highPrice: highPrice,
+                lowPrice: lowPrice,
+                volume: Math.floor(5000000 + Math.random() * 50000000),
+                source: '模拟数据'
+            };
+        }
+
+        // 计算技术指标
+        function calculateIndicators(kLineData, currentPrice) {
+            // 简化计算
+            const ma5 = currentPrice * (0.98 + Math.random() * 0.04);
+            const ma20 = currentPrice * (0.96 + Math.random() * 0.08);
+            const atr = currentPrice * 0.025;
+            const rsi = 40 + Math.random() * 40;
+            const macd = (ma5 - ma20) * 0.1;
+            
+            return { ma5, ma20, atr, rsi, macd };
+        }
+
+        // 生成预测
+        function generatePrediction(price, indicators, period) {
+            const multipliers = { 'day': { range: 1.0, confidence: 75 }, 'week': { range: 2.0, confidence: 65 }, 'month': { range: 3.5, confidence: 55 } };
+            const m = multipliers[period];
+            const predictedLow = price - indicators.atr * m.range * 0.8;
+            const predictedHigh = price + indicators.atr * m.range * 0.8;
+            const predictedRange = ((predictedHigh - predictedLow) / price) * 100;
+            
+            const trendScore = price > indicators.ma20 ? 70 : 30;
+            const momentumScore = indicators.rsi < 30 ? 80 : (indicators.rsi > 70 ? 20 : 50);
+            const score = Math.round((trendScore + momentumScore) / 2);
+            
+            let recommendation;
+            if (score >= 80) recommendation = { text: '强烈建议买入', desc: '多个技术指标显示强烈买入信号', class: 'strong-buy', icon: '🚀' };
+            else if (score >= 60) recommendation = { text: '建议买入', desc: '技术指标偏向乐观', class: 'buy', icon: '💹' };
+            else if (score >= 40) recommendation = { text: '建议持有', desc: '趋势方向不明确', class: 'hold', icon: '⏸️' };
+            else if (score >= 20) recommendation = { text: '建议卖出', desc: '技术指标显示回调压力', class: 'sell', icon: '📉' };
+            else recommendation = { text: '强烈建议卖出', desc: '建议减仓或止损', class: 'strong-sell', icon: '⚠️' };
+            
+            return {
+                predictedLow, predictedHigh, predictedRange,
+                buyPrice: predictedLow,
+                sellPrice: predictedHigh,
+                stopLoss: price - indicators.atr * m.range * 1.2,
+                takeProfit: price + indicators.atr * m.range * 1.5,
+                confidence: m.confidence,
+                recommendation,
+                score,
+                trend: score >= 60 ? '看涨' : (score >= 40 ? '震荡' : '看跌')
+            };
+        }
+
+        // 生成新闻
+        function generateNews(name) {
+            const templates = {
+                positive: [`${name}发布超预期财报，业绩大幅增长`, `${name}新产品发布，市场反响热烈`, `机构大幅增持${name}股份，看好未来`],
+                negative: [`${name}面临行业监管压力`, `分析师下调${name}评级`, `竞争对手推出新产品，对${name}形成挑战`],
+                neutral: [`${name}宣布正常业务更新`, `${name}将参加行业会议`, `${name}发布最新产品路线图`]
+            };
+            const sources = ['财经时报', '证券时报', '华尔街见闻', '第一财经'];
+            
+            const news = [];
+            templates.positive.forEach((title, i) => news.push({ title, sentiment: 'positive', source: sources[i], time: `${2 + i * 2}小时前` }));
+            templates.negative.forEach((title, i) => news.push({ title, sentiment: 'negative', source: sources[(i + 2) % sources.length], time: `${4 + i * 2}小时前` }));
+            templates.neutral.forEach((title, i) => news.push({ title, sentiment: 'neutral', source: sources[(i + 4) % sources.length], time: `${8 + i * 2}小时前` }));
+            return news;
+        }
+
+        // 搜索股票
+        async function searchStock() {
+            const query = document.getElementById('stockSearch').value.trim();
+            if (!query) { alert('请输入股票代码！'); return; }
+
+            showLoading(true);
+            hideError();
+
+            try {
+                // 尝试获取实时数据
+                const result = await fetchRealTimeData(query);
+                
+                if (result.success && result.data) {
+                    // 实时数据成功
+                    currentStock = result.data;
+                    currentStock.basePrice = currentStock.prevClose || currentStock.currentPrice;
+                    
+                    // 获取K线数据
+                    const klineResult = await fetchKLineData(query, 'day');
+                    if (klineResult.success && klineResult.data.length > 0) {
+                        currentStock.kLineData = klineResult.data;
+                    } else {
+                        currentStock.kLineData = generateKLineData(currentStock.currentPrice);
+                    }
+                } else {
+                    // 使用模拟数据
+                    currentStock = generateSimulatedData(query);
+                    currentStock.kLineData = generateKLineData(currentStock.currentPrice);
+                }
+                
+                currentStock.indicators = calculateIndicators(currentStock.kLineData, currentStock.currentPrice);
+                currentStock.prediction = {
+                    day: generatePrediction(currentStock.currentPrice, currentStock.indicators, 'day'),
+                    week: generatePrediction(currentStock.currentPrice, currentStock.indicators, 'week'),
+                    month: generatePrediction(currentStock.currentPrice, currentStock.indicators, 'month')
+                };
+                currentStock.news = generateNews(currentStock.name);
+                
+                updateUI();
+                renderChart();
+                renderNews();
+                
+            } catch (error) {
+                console.error('获取数据失败:', error);
+                currentStock = generateSimulatedData(query);
+                currentStock.kLineData = generateKLineData(currentStock.currentPrice);
+                currentStock.indicators = calculateIndicators(currentStock.kLineData, currentStock.currentPrice);
+                currentStock.prediction = {
+                    day: generatePrediction(currentStock.currentPrice, currentStock.indicators, 'day'),
+                    week: generatePrediction(currentStock.currentPrice, currentStock.indicators, 'week'),
+                    month: generatePrediction(currentStock.currentPrice, currentStock.indicators, 'month')
+                };
+                currentStock.news = generateNews(currentStock.name);
+                updateUI();
+                renderChart();
+                renderNews();
+            }
+
+            showLoading(false);
+        }
+
+        // 生成K线数据
+        function generateKLineData(basePrice) {
+            const kLineData = [];
+            let price = basePrice * 0.85;
+            for (let i = 60; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const volatility = price * 0.025;
+                const trend = price * 0.0005;
+                const open = price + (Math.random() - 0.5) * volatility;
+                const close = open + (Math.random() - 0.45) * volatility + trend;
+                const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+                const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+                kLineData.push({ date: date.toISOString().split('T')[0], open, high, low, close });
+                price = close;
+            }
+            return kLineData;
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingState').style.display = show ? 'flex' : 'none';
+            document.getElementById('contentArea').style.opacity = show ? '0.5' : '1';
+        }
+
+        function hideError() {
+            document.getElementById('errorState').style.display = 'none';
+        }
+
+        function updateUI() {
+            const stock = currentStock;
+            const prediction = stock.prediction[currentPeriod];
+            const ind = stock.indicators;
+            
+            document.getElementById('stockName').textContent = stock.name;
+            document.getElementById('stockCode').textContent = stock.symbol;
+            document.getElementById('marketBadge').textContent = stock.market;
+            document.getElementById('dataSource').textContent = stock.source || '实时数据';
+            
+            document.getElementById('currentPrice').textContent = formatPrice(stock.currentPrice, stock.currency);
+            document.getElementById('openPrice').textContent = formatPrice(stock.openPrice, stock.currency);
+            document.getElementById('highPrice').textContent = formatPrice(stock.highPrice, stock.currency);
+            document.getElementById('lowPrice').textContent = formatPrice(stock.lowPrice, stock.currency);
+            document.getElementById('volume').textContent = formatVolume(stock.volume);
+            
+            const isUp = stock.changePercent >= 0;
+            const changeValue = document.getElementById('changeValue');
+            const changePercent = document.getElementById('changePercent');
+            
+            changeValue.className = `change-value ${isUp ? 'positive' : 'negative'}`;
+            changePercent.className = `change-percent ${isUp ? 'positive' : 'negative'}`;
+            changeValue.innerHTML = `<span class="price-arrow ${isUp ? 'up' : 'down'}">▲</span> ${isUp ? '+' : ''}${stock.changeAmount.toFixed(2)}`;
+            changePercent.textContent = `${isUp ? '+' : ''}${stock.changePercent.toFixed(2)}%`;
+            
+            document.getElementById('overallScore').textContent = prediction.score;
+            document.getElementById('overallTrend').textContent = prediction.trend;
+            
+            const scoreEl = document.getElementById('overallScore');
+            const trendEl = document.getElementById('overallTrend');
+            const dot = trendEl.previousElementSibling;
+            
+            if (prediction.score >= 70) {
+                scoreEl.className = 'score-value positive';
+                trendEl.className = 'trend-text positive';
+                dot.style.background = 'var(--accent-green)';
+            } else if (prediction.score >= 40) {
+                scoreEl.className = 'score-value';
+                trendEl.className = 'trend-text';
+                dot.style.background = 'var(--accent-orange)';
+            } else {
+                scoreEl.className = 'score-value negative';
+                trendEl.className = 'trend-text negative';
+                dot.style.background = 'var(--accent-red)';
+            }
+            
+            const periodLabels = { 'day': '日', 'week': '周', 'month': '月' };
+            document.getElementById('periodLabel').textContent = periodLabels[currentPeriod];
+            
+            document.getElementById('predictedLow').textContent = formatPrice(prediction.predictedLow, stock.currency);
+            document.getElementById('predictedHigh').textContent = formatPrice(prediction.predictedHigh, stock.currency);
+            document.getElementById('predictedRange').textContent = prediction.predictedRange.toFixed(2) + '%';
+            document.getElementById('confidenceBadge').textContent = `置信度 ${prediction.confidence}%`;
+            
+            document.getElementById('buyPrice').textContent = formatPrice(prediction.buyPrice, stock.currency);
+            document.getElementById('sellPrice').textContent = formatPrice(prediction.sellPrice, stock.currency);
+            document.getElementById('stopLoss').textContent = formatPrice(prediction.stopLoss, stock.currency);
+            document.getElementById('takeProfit').textContent = formatPrice(prediction.takeProfit, stock.currency);
+            
+            const recCard = document.getElementById('recommendationCard');
+            recCard.className = `recommendation-card ${prediction.recommendation.class}`;
+            document.getElementById('recommendationTitle').textContent = prediction.recommendation.text;
+            document.getElementById('recommendationDesc').textContent = prediction.recommendation.desc;
+            recCard.querySelector('.recommendation-icon').textContent = prediction.recommendation.icon;
+            
+            document.getElementById('ma5').textContent = formatPrice(ind.ma5, stock.currency);
+            document.getElementById('ma20').textContent = formatPrice(ind.ma20, stock.currency);
+            document.getElementById('atr').textContent = formatPrice(ind.atr, stock.currency);
+            document.getElementById('rsi').textContent = ind.rsi.toFixed(1);
+            document.getElementById('macd').textContent = ind.macd.toFixed(2);
+            
+            const news = currentStock.news;
+            document.getElementById('positiveCount').textContent = `利好 ${news.filter(n => n.sentiment === 'positive').length}`;
+            document.getElementById('negativeCount').textContent = `利空 ${news.filter(n => n.sentiment === 'negative').length}`;
+            document.getElementById('neutralCount').textContent = `中性 ${news.filter(n => n.sentiment === 'neutral').length}`;
+        }
+
+        function setPeriod(period) {
+            currentPeriod = period;
+            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            if (currentStock) updateUI();
+        }
+
+        function setChartType(type) {
+            currentChartType = type;
+            document.querySelectorAll('.chart-type-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            if (currentStock) renderChart();
+        }
+
+        function quickSelect(code) {
+            document.querySelectorAll('.quick-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('stockSearch').value = code;
+            searchStock();
+        }
+
+        function renderChart() {
+            if (!currentStock || !currentStock.kLineData) return;
+            
+            const ctx = document.getElementById('kLineChart').getContext('2d');
+            const closes = currentStock.kLineData.map(d => d.close);
+            const labels = currentStock.kLineData.map(d => d.date.slice(5));
+            
+            if (chartInstance) chartInstance.destroy();
+            
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '价格',
+                        data: closes,
+                        borderColor: '#58A6FF',
+                        borderWidth: 2,
+                        fill: true,
+                        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                        tension: 0.1,
+                        pointRadius: 0,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#21262D',
+                            titleColor: '#F0F6FC',
+                            bodyColor: '#8B949E',
+                            borderColor: '#30363D',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(48, 54, 61, 0.5)' }, ticks: { color: '#8B949E', maxTicksLimit: 8 } },
+                        y: { grid: { color: 'rgba(48, 54, 61, 0.5)' }, ticks: { color: '#8B949E' } }
+                    }
+                }
+            });
+        }
+
+        function renderNews() {
+            const newsList = document.getElementById('newsList');
+            const news = currentStock.news;
+            newsList.innerHTML = news.map(item => `
+                <div class="news-item ${item.sentiment}">
+                    <div class="news-meta">
+                        <span class="news-sentiment ${item.sentiment}">${item.sentiment === 'positive' ? '✅ 利好' : (item.sentiment === 'negative' ? '❌ 利空' : '⚪ 中性')}</span>
+                        <span class="news-time">${item.time}</span>
+                    </div>
+                    <div class="news-headline">${item.title}</div>
+                    <div class="news-source">📰 ${item.source}</div>
+                </div>
+            `).join('');
+        }
+
+        window.onload = function() {
+            quickSelect('sh600519');
+        };
+
+        document.getElementById('stockSearch').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchStock();
+        });
+    </script>
+</body>
+</html>

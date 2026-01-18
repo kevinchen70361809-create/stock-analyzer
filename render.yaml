@@ -1,0 +1,17 @@
+# Runtime Configuration
+runtime: node
+buildCommand: npm install
+startCommand: npm start
+
+# Web Service Configuration
+name: stock-analyzer
+envVars:
+  - key: NODE_ENV
+    value: production
+  - key: PORT
+    value: "10000"
+
+# Health Check
+healthCheckPath: /api/health
+
+# Auto-deploy settings (optional, requires connected GitHub repo)
